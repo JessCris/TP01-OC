@@ -1,0 +1,237 @@
+import sys
+#Funções auxiliares
+
+#separa o imediato do rs2/rs1
+def sep_imed(s):               
+	x = s.replace("(", "")
+	x = x.replace(")","")
+	x = x.split("x")
+	return x
+
+#separa a virgula do rs1/rs2
+def anti_x_virgula(s):
+    x = s.replace(",","")
+    x = x.replace("x","")
+
+#separa a instrução lw e sw
+def sep_swlw(linha):
+    vet_aux = linha.split()
+    ## separando o rs1 e imediato
+    imm_rs1 = vet_aux[2] #pense num nome melhor
+    temp = sep_imed(vet_aux[2])
+    vet_aux.pop()
+    vet_aux.append(temp[0])
+    vet_aux.append(temp[1])
+    ## ***
+    ##tirando o 'x' e a virgula do rs2
+    vet_aux[1] = vet_aux[1][1:-1]
+    #****
+    return(vet_aux)
+
+#opr = operação, é o que vai ditar qual o opcode, funct7 e funct3
+def opcode(opr):
+    if opr == "sub" or  opr == "xor" or opr == "srl" or opr == "or":
+        return "0110011"
+    
+    if opr == "addi":
+        return "0010011"
+    
+    if opr == "beq":
+        return "1100011"
+    
+    if opr == "sw" or opr == "sh": 
+        return "0100011"
+    
+    if opr == "lw" or opr == "lh": 
+        return "0000011"
+    
+    if opr == "andi":
+        return "0010011"
+    
+
+def funct3(opr):
+    if opr == "addi" or opr == "beq":  #beq aqui é novo
+      return "000"
+    
+    if opr == "sw" or opr == "lw": #novas instruções
+        return "010"
+    	
+    if opr == "sub":
+      return "000"
+    
+    if opr == "xor":
+      return "100"
+    
+    if opr == "srl":
+      return "101"
+    
+    if opr == "andi":
+        return "111"
+    
+    if opr == "or":
+        return "110"
+    
+    if opr == "lh" or opr == "sh":
+        return "001"
+
+def funct7(opr):
+  if(opr=="sub"):
+      return "0100000"
+  return "0000000"
+
+def somaBinario(a, b):   
+    for ch in a: assert ch in {'0','1'}, 'bad digit: ' + ch    
+    for ch in b: assert ch in {'0','1'}, 'bad digit: ' + ch    
+    sumx = int(a, 2) + int(b, 2)    
+    return bin(sumx)[2:]
+
+def binary(num, size):
+    if int(num) < 0:
+        bin2 = "{0:b}".format(int(num)*(-1))
+        bin1 = "0"
+    else:
+        bin2 = "{0:b}".format(int(num))
+        bin1 = "0"
+    for i in range(size - len(bin2) - 1):
+        bin1 = bin1 + "0"
+    if len(bin2) == size:
+        return bin2
+    bin = bin1 + bin2
+    if int(num) < 0:
+        aux = ""
+        for i in range(12):
+            if bin[i] == "0": 
+                aux += "1"
+            else: aux += "0"
+        return somaBinario(aux,"1")
+    return bin
+
+def generate_code(linha):
+
+##nop
+##addi x0, x0, 0
+
+    if linha == "nop":
+        linha = "addi x0, x0, 0"
+
+    vet = linha.split()
+    opr = vet[0]
+
+## sv rd, rs
+## addi rd, rs, 0
+
+    if opr == "sub" or  opr == "xor" or opr == "srl" or opr == "or":
+        if vet[1][0] == "x" and vet[2][0] == "x" and vet[3][0] == "x":
+            characters = ",x"
+            linha = ''.join(i for i in linha if i not in characters)
+            vet_aux = linha.split()
+            rd = vet_aux[1]
+            rs1 = vet_aux[2]
+            rs2 = vet_aux[3]
+            code = funct7(opr) + binary(rs2,5) + binary(rs1,5) + funct3(opr) + binary(rd,5) + opcode(opr)
+            return code
+        else: return "Erro de sintaxe"
+    
+    if opr == "addi" or opr == "andi":
+        if vet[1][0] == "x" and vet[2][0] == "x" and vet[3][0] != "x":
+            characters = ",x"
+            linha = ''.join(i for i in linha if i not in characters)
+            vet_aux = linha.split()
+            rd = vet_aux[1]
+            rs1 = vet_aux[2]
+            imed = vet_aux[3]
+            code = binary(imed,12) + binary(rs1,5) + funct3(opr) + binary(rd,5) + opcode(opr)
+            return code
+        else: return "Erro de sintaxe"
+
+    if opr =="lw" or opr == "lh":
+        if vet[1][0] == "x" : ##erro de sintaxe dps
+            aux = sep_swlw(linha)
+            rd = aux[1]
+            rs1 = aux[3]
+            imm = aux[2]
+            immbin = binary(imm,12)
+            
+            code = immbin + binary(rs1,5) + funct3(opr) + binary(rd,5) + opcode(opr)
+            return code
+        else: return "Erro de sintaxe"
+	   	
+    if opr =="beq":
+        if vet[1][0] == "x" and vet[2][0] == "x" and vet[3][0] != "x":
+            characters = ",x"
+            linha = ''.join(i for i in linha if i not in characters)
+            vet_aux = linha.split()
+            rs2 = vet_aux[1]
+            rs1 = vet_aux[2]
+            immbin = binary(vet_aux[3],12)
+
+            code = immbin[11] + immbin[5:11] + binary(rs2,5) + binary(rs1,5)+funct3(opr) + immbin[1:5] + immbin[10] + opcode(opr)
+            return code
+        else: return "Erro de sintaxe"
+
+    if opr == "sw" or opr == "sh":
+        if vet[1][0] == "x" :
+            aux = sep_swlw(linha)
+            rs2 = aux[1]
+            rs1 = aux[3]
+            imm = aux[2]
+            immbin = binary(imm,12)
+            
+            code = immbin[5:12] + binary(rs2,5) + binary(rs1,5) + funct3(opr) +immbin[0:5] + opcode(opr)
+            return code
+        else: return "Erro de sintaxe"
+
+##Pseudo Instruções
+
+    if opr == "sv":
+        if vet[1][0] == "x" and vet[2][0] == "x":
+            characters = ",x"
+            linha = ''.join(i for i in linha if i not in characters)
+            vet_aux = linha.split()
+            rd = vet_aux[1]
+            rs1 = vet_aux[2]
+            imed = "0"
+            code = binary(imed,12) + binary(rs1,5) + funct3("addi") + binary(rd,5) + opcode("addi")
+            return code
+        else: return "Erro de sintaxe"
+
+    if opr == "neg":
+        if vet[1][0] == "x" and vet[2][0] == "x":
+            characters = ",x"
+            linha = ''.join(i for i in linha if i not in characters)
+            vet_aux = linha.split()
+            rd = vet_aux[1]
+            rs1 = "0"
+            rs2 = vet_aux[2]
+            code = funct7(opr) + binary(rs2,5) + binary(rs1,5) + funct3("sub") + binary(rd,5) + opcode("sub")
+            return code
+        else: return "Erro de sintaxe"
+			
+##Fim do código
+
+
+#Leitura do Arquivo e chamada das funções
+
+if (len(sys.argv) == 1):
+    Arq1 = input("Digite o nome do arquivo que deseja traduzir:\n")
+    Entrada = open(Arq1,"r")
+    Saida = open("Saida.txt","w")
+    opcao = int(input("Deseja que o codigo seja mostrado na tela? Se sim, digite 1. Se não, digite 0.\n"))
+    if not(opcao == 0 or opcao == 1):
+        print("Queridão, não tem essa opção. Faça uma boa escolha na próxima.")
+
+else:
+    Entrada = (open(sys.argv[1],"r"))
+    Saida = open(sys.argv[3],"w")
+    opcao = 0
+
+
+
+for linha in Entrada:
+    code = generate_code(linha)
+    Saida.write(code + "\n")
+    if(opcao):
+        print(code)
+
+Entrada.close()
+Saida.close()
